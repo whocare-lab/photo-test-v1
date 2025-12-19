@@ -50,60 +50,87 @@
         </div>
         <div id="statusMsg" class="text-sm text-gray-600 h-5"></div>
     </div>
-    <script>
-        // DOM 元素
-        const fileInput = document.getElementById('fileInput');
-        const downloadBtn = document.getElementById('downloadBtn');
-        const previewImage = document.getElementById('previewImage');
-        const placeholderText = document.getElementById('placeholderText');
-        const statusMsg = document.getElementById('statusMsg');
-        let currentFileUrl = null;
-        let originalFileName = 'image.png';
-        // 監聽檔案選擇
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            statusMsg.textContent = "讀取中...";
-            try {
-                originalFileName = file.name;
-                if (currentFileUrl) {
-                    URL.revokeObjectURL(currentFileUrl);
-                }
-                currentFileUrl = URL.createObjectURL(file);
-                previewImage.src = currentFileUrl;
-                previewImage.onload = () => {
-                    previewImage.classList.remove('hidden');
-                    placeholderText.classList.add('hidden');
-                    downloadBtn.disabled = false;
-                    statusMsg.textContent = 已載入: ${file.name} (${Math.round(file.size / 1024)} KB);
+   <script>
+    const fileInput = document.getElementById('fileInput');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const previewImage = document.getElementById('previewImage');
+    const placeholderText = document.getElementById('placeholderText');
+    const statusMsg = document.getElementById('statusMsg');
+    let currentFileUrl = null;
+    let originalFileName = 'image.png';
+    // 判斷是否為 iOS Safari（含 iPhone / iPad）
+    const isIOS = /iP(hone|od|ad)/.test(navigator.platform) ||
+                  (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        statusMsg.textContent = "讀取中...";
+        try {
+            originalFileName = file.name;
+            // 先清除舊的 URL
+            if (currentFileUrl) {
+                URL.revokeObjectURL(currentFileUrl);
+                currentFileUrl = null;
+            }
+            // iOS 有時對 createObjectURL 有問題，改用 FileReader
+            if (isIOS) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const dataUrl = evt.target.result; // base64
+                    previewImage.src = dataUrl;
+                    // 不再依賴 onload，再等一輪 event 迴圈後顯示
+                    requestAnimationFrame(() => {
+                        previewImage.classList.remove('hidden');
+                        placeholderText.classList.add('hidden');
+                        downloadBtn.disabled = false;
+                        statusMsg.textContent =
+                            已載入: ${file.name} (${Math.round(file.size / 1024)} KB);
+                    });
                 };
-                previewImage.onerror = () => {
-                    statusMsg.textContent = "錯誤：無法顯示圖片";
+                reader.onerror = function() {
+                    statusMsg.textContent = "錯誤：無法讀取圖片";
                     statusMsg.classList.add('text-red-500');
                 };
-            } catch (error) {
-                console.error(error);
-                statusMsg.textContent = "發生錯誤：" + error.message;
+                reader.readAsDataURL(file);
+            } else {
+                // 其他瀏覽器用 Blob URL
+                currentFileUrl = URL.createObjectURL(file);
+                previewImage.src = currentFileUrl;
+                // 直接顯示，不等 onload
+                previewImage.classList.remove('hidden');
+                placeholderText.classList.add('hidden');
+                downloadBtn.disabled = false;
+                statusMsg.textContent =
+                    已載入: ${file.name} (${Math.round(file.size / 1024)} KB);
             }
-        });
-        // 下載按鈕邏輯
-        downloadBtn.addEventListener('click', () => {
-            if (!currentFileUrl) return;
-            try {
-                const link = document.createElement('a');
-                link.href = currentFileUrl;
-                link.download = "copy_" + originalFileName;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                statusMsg.textContent = "下載請求已發送";
-                setTimeout(() => {
-                    statusMsg.textContent = 已載入: ${originalFileName};
-                }, 2000);
-            } catch (error) {
-                statusMsg.textContent = "下載失敗：" + error.message;
-            }
-        });
-    </script>
+        } catch (error) {
+            console.error(error);
+            statusMsg.textContent = "發生錯誤：" + error.message;
+            statusMsg.classList.add('text-red-500');
+        }
+    });
+    // 下載按鈕：iOS 無法用 a[download] 下載 Blob，只在非 iOS 走這段
+    downloadBtn.addEventListener('click', () => {
+        if (!currentFileUrl || isIOS) {
+            // iOS Safari 對 <a download> + blob/url 支援很差，這裡直接提示
+            statusMsg.textContent = "iOS Safari 目前僅支援預覽，暫不支援直接下載";
+            return;
+        }
+        try {
+            const link = document.createElement('a');
+            link.href = currentFileUrl;
+            link.download = "copy_" + originalFileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            statusMsg.textContent = "下載請求已發送";
+            setTimeout(() => {
+                statusMsg.textContent = 已載入: ${originalFileName};
+            }, 2000);
+        } catch (error) {
+            statusMsg.textContent = "下載失敗：" + error.message;
+        }
+    });
+</script>
 </body>
 </html>
