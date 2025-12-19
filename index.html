@@ -1,4 +1,4 @@
-<!-- 2025-12-19 17:50 Minimal Stone Studio with iPhone-safe FileReader(DataURL) -->
+<!-- 2025-12-19 17:55 Minimal Stone Studio with iOS-safe label+file input -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -18,6 +18,13 @@
     .step-section.active { display: block; }
     #previewContainer {
       border: 2px dashed rgba(148, 163, 184, 0.7);
+    }
+    /* 讓真正的 input 佔滿整個按鈕區域但透明，可確保 iOS 一定接到點擊 */
+    #fileInput {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
     }
   </style>
   <script>
@@ -51,12 +58,13 @@
       <span id="placeholderText" class="text-gray-500 text-sm">尚未選擇圖片</span>
       <img id="previewImage" alt="預覽" class="hidden w-full h-full object-contain">
     </div>
-    <input type="file" id="fileInput" accept="image/*" class="hidden">
-    <button id="btnChoose"
-            class="relative w-full flex items-center justify-center gap-2 bg-blue-600 active:bg-blue-700
-                   text-white text-base font-medium py-3 rounded-2xl shadow-sm mb-3">
+    <!-- 這裡用 label + 真正的 input 疊在上面，避免 JS click() -->
+    <label
+      class="relative w-full flex items-center justify-center gap-2 bg-blue-600 active:bg-blue-700
+             text-white text-base font-medium py-3 rounded-2xl shadow-sm mb-3 cursor-pointer">
       選擇照片
-    </button>
+      <input type="file" id="fileInput" accept="image/*">
+    </label>
     <button id="btnGoCrop"
             class="w-full bg-emerald-500 text-white py-3 rounded-2xl font-medium disabled:bg-gray-500"
             disabled>
@@ -108,7 +116,6 @@
   const isIOS = /iP(hone|od|ad)/.test(navigator.platform) ||
     (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
   const fileInput = document.getElementById('fileInput');
-  const btnChoose = document.getElementById('btnChoose');
   const previewImage = document.getElementById('previewImage');
   const placeholderText = document.getElementById('placeholderText');
   const btnGoCrop = document.getElementById('btnGoCrop');
@@ -126,9 +133,7 @@
     });
     document.getElementById('step-' + n).classList.add('active');
   }
-  // 上傳按鈕
-  btnChoose.addEventListener('click', () => fileInput.click());
-  // iPhone + GitHub Pages 安全的上傳邏輯：FileReader + DataURL
+  // 這裡完全靠 input 自己的點擊（iOS 最穩定）
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -137,7 +142,6 @@
       const dataUrl = evt.target.result;
       uploadedDataUrl = dataUrl;
       previewImage.src = dataUrl;
-      previewImage.style.display = 'block';
       previewImage.classList.remove('hidden');
       placeholderText.classList.add('hidden');
       btnGoCrop.disabled = false;
@@ -147,16 +151,12 @@
     };
     reader.readAsDataURL(file);
   });
-  // 進入裁切
-  btnGoCrop.addEventListener('click', () => {
+  document.getElementById('btnGoCrop').addEventListener('click', () => {
     if (!uploadedDataUrl) return;
     imageToCrop.src = uploadedDataUrl;
     setStep(2);
-    // 等圖片掛好後再建 cropper
     setTimeout(() => {
-      if (cropper) {
-        cropper.destroy();
-      }
+      if (cropper) cropper.destroy();
       cropper = new Cropper(imageToCrop, {
         viewMode: 1,
         dragMode: 'move',
@@ -165,7 +165,6 @@
       });
     }, 100);
   });
-  // 裁切完成
   document.getElementById('btnCrop').addEventListener('click', () => {
     if (!cropper) return;
     croppedCanvas = cropper.getCroppedCanvas({
@@ -176,7 +175,6 @@
     croppedPreview.src = croppedCanvas.toDataURL('image/jpeg', 0.9);
     setStep(3);
   });
-  // 分割圖片
   document.getElementById('btnSplit').addEventListener('click', () => {
     if (!croppedCanvas) return;
     const cols = Math.max(1, Math.min(10, parseInt(colsInput.value) || 1));
@@ -214,12 +212,8 @@
       }
     }
   });
-  // 返回按鈕
   document.getElementById('btnBack1').addEventListener('click', () => {
-    if (cropper) {
-      cropper.destroy();
-      cropper = null;
-    }
+    if (cropper) { cropper.destroy(); cropper = null; }
     setStep(1);
   });
   document.getElementById('btnBack2').addEventListener('click', () => {
