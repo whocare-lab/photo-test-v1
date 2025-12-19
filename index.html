@@ -1,3 +1,4 @@
+<!-- 2025-12-19 17:20 針對 iPhone Safari 修正版：改用 FileReader + DataURL 做圖片預覽 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -9,7 +10,7 @@
         body {
             font-family: 'Noto Sans TC', sans-serif;
         }
-        /* 讓 file input 疊在按鈕上、完全透明，但仍是可點擊元素 */
+        /* 讓 file input 疊在按鈕上、完全透明，但仍是可點擊元素（iOS 相容寫法） */
         .file-input-overlay {
             position: absolute;
             inset: 0;
@@ -29,18 +30,21 @@
             <img id="previewImage" class="hidden w-full h-full object-contain" alt="預覽圖片">
         </div>
         <!-- 操作按鈕區 -->
-        <div class="flex flex-col gap-3 relative">
-            <!-- 外層是你原本的按鈕，用來呈現樣式 -->
-            <button id="uploadBtn"
+        <div class="flex flex-col gap-3">
+            <!-- 外層是視覺按鈕 -->
+            <button
+                id="uploadBtn"
                 class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 relative">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
                 1. 選擇/上傳照片
-                <!-- 真正的 file input 疊在按鈕上 -->
+                <!-- 真正的檔案輸入，透明疊在按鈕上 -->
                 <input type="file" id="fileInput" accept="image/*" class="file-input-overlay">
             </button>
-            <button id="downloadBtn" disabled
+            <button
+                id="downloadBtn"
+                disabled
                 class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -50,42 +54,48 @@
         </div>
         <div id="statusMsg" class="text-sm text-gray-600 h-5"></div>
     </div>
-   <script>
-    const fileInput = document.getElementById('fileInput');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const previewImage = document.getElementById('previewImage');
-    const placeholderText = document.getElementById('placeholderText');
-    const statusMsg = document.getElementById('statusMsg');
-    let currentFileUrl = null;
-    let originalFileName = 'image.png';
-    // 判斷是否為 iOS Safari（含 iPhone / iPad）
-    const isIOS = /iP(hone|od|ad)/.test(navigator.platform) ||
-                  (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        statusMsg.textContent = "讀取中...";
-        try {
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const previewImage = document.getElementById('previewImage');
+        const placeholderText = document.getElementById('placeholderText');
+        const statusMsg = document.getElementById('statusMsg');
+        let currentFileUrl = null;
+        let originalFileName = 'image.png';
+        // 判斷是否為 iOS 裝置（iPhone / iPad）
+        const isIOS = /iP(hone|od|ad)/.test(navigator.platform) ||
+                      (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+        // 檔案選擇後顯示預覽
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) {
+                return;
+            }
+            statusMsg.textContent = "讀取中...";
+            statusMsg.classList.remove('text-red-500');
             originalFileName = file.name;
-            // 先清除舊的 URL
+            // 先清掉舊的 Blob URL
             if (currentFileUrl) {
                 URL.revokeObjectURL(currentFileUrl);
                 currentFileUrl = null;
             }
-            // iOS 有時對 createObjectURL 有問題，改用 FileReader
+            // 針對 iOS：使用 FileReader + DataURL
             if (isIOS) {
                 const reader = new FileReader();
                 reader.onload = function(evt) {
-                    const dataUrl = evt.target.result; // base64
+                    const dataUrl = evt.target.result;
+                    if (!dataUrl) {
+                        statusMsg.textContent = "錯誤：無法讀取圖片";
+                        statusMsg.classList.add('text-red-500');
+                        return;
+                    }
                     previewImage.src = dataUrl;
-                    // 不再依賴 onload，再等一輪 event 迴圈後顯示
-                    requestAnimationFrame(() => {
-                        previewImage.classList.remove('hidden');
-                        placeholderText.classList.add('hidden');
-                        downloadBtn.disabled = false;
-                        statusMsg.textContent =
-                            已載入: ${file.name} (${Math.round(file.size / 1024)} KB);
-                    });
+                    // 不再依賴 onload，直接顯示
+                    previewImage.classList.remove('hidden');
+                    placeholderText.classList.add('hidden');
+                    downloadBtn.disabled = true; // iOS 不做下載，只做預覽
+                    statusMsg.textContent =
+                        已載入: ${file.name} (${Math.round(file.size / 1024)} KB);
                 };
                 reader.onerror = function() {
                     statusMsg.textContent = "錯誤：無法讀取圖片";
@@ -93,7 +103,7 @@
                 };
                 reader.readAsDataURL(file);
             } else {
-                // 其他瀏覽器用 Blob URL
+                // 非 iOS：使用 Blob URL + 下載
                 currentFileUrl = URL.createObjectURL(file);
                 previewImage.src = currentFileUrl;
                 // 直接顯示，不等 onload
@@ -103,34 +113,31 @@
                 statusMsg.textContent =
                     已載入: ${file.name} (${Math.round(file.size / 1024)} KB);
             }
-        } catch (error) {
-            console.error(error);
-            statusMsg.textContent = "發生錯誤：" + error.message;
-            statusMsg.classList.add('text-red-500');
-        }
-    });
-    // 下載按鈕：iOS 無法用 a[download] 下載 Blob，只在非 iOS 走這段
-    downloadBtn.addEventListener('click', () => {
-        if (!currentFileUrl || isIOS) {
-            // iOS Safari 對 <a download> + blob/url 支援很差，這裡直接提示
-            statusMsg.textContent = "iOS Safari 目前僅支援預覽，暫不支援直接下載";
-            return;
-        }
-        try {
-            const link = document.createElement('a');
-            link.href = currentFileUrl;
-            link.download = "copy_" + originalFileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            statusMsg.textContent = "下載請求已發送";
-            setTimeout(() => {
-                statusMsg.textContent = 已載入: ${originalFileName};
-            }, 2000);
-        } catch (error) {
-            statusMsg.textContent = "下載失敗：" + error.message;
-        }
-    });
-</script>
+        });
+        // 下載：僅在非 iOS 裝置上啟用
+        downloadBtn.addEventListener('click', () => {
+            if (!currentFileUrl) return;
+            if (isIOS) {
+                // iOS Safari 對 <a download> 支援很差，這裡只提示
+                statusMsg.textContent = "iOS Safari 僅支援預覽，下載請用電腦瀏覽器。";
+                return;
+            }
+            try {
+                const link = document.createElement('a');
+                link.href = currentFileUrl;
+                link.download = "copy_" + originalFileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                statusMsg.textContent = "下載請求已發送";
+                setTimeout(() => {
+                    statusMsg.textContent = 已載入: ${originalFileName};
+                }, 2000);
+            } catch (error) {
+                statusMsg.textContent = "下載失敗：" + error.message;
+                statusMsg.classList.add('text-red-500');
+            }
+        });
+    </script>
 </body>
 </html>
