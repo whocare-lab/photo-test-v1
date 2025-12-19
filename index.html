@@ -9,6 +9,13 @@
         body {
             font-family: 'Noto Sans TC', sans-serif;
         }
+        /* 讓 file input 疊在按鈕上、完全透明，但仍是可點擊元素 */
+        .file-input-overlay {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
@@ -16,22 +23,25 @@
         
         <h1 class="text-2xl font-bold text-gray-800">步驟 1：基礎 I/O 測試</h1>
         <p class="text-gray-500 text-sm">此階段僅測試瀏覽器是否能正確讀取並回傳檔案，不涉及任何影像處理。</p>
-        <!-- 隱藏的檔案輸入框 -->
-        <input type="file" id="fileInput" accept="image/*" class="hidden">
         <!-- 預覽區域 -->
         <div id="previewContainer" class="w-full h-64 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden relative">
             <span id="placeholderText" class="text-gray-400">尚未選擇圖片</span>
             <img id="previewImage" class="hidden w-full h-full object-contain" alt="預覽圖片">
         </div>
         <!-- 操作按鈕區 -->
-        <div class="flex flex-col gap-3">
-            <button id="uploadBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+        <div class="flex flex-col gap-3 relative">
+            <!-- 外層是你原本的按鈕，用來呈現樣式 -->
+            <button id="uploadBtn"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 relative">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
                 1. 選擇/上傳照片
+                <!-- 真正的 file input 疊在按鈕上 -->
+                <input type="file" id="fileInput" accept="image/*" class="file-input-overlay">
             </button>
-            <button id="downloadBtn" disabled class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+            <button id="downloadBtn" disabled
+                class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
@@ -43,35 +53,23 @@
     <script>
         // DOM 元素
         const fileInput = document.getElementById('fileInput');
-        const uploadBtn = document.getElementById('uploadBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         const previewImage = document.getElementById('previewImage');
         const placeholderText = document.getElementById('placeholderText');
         const statusMsg = document.getElementById('statusMsg');
-        // 變數來儲存目前的 Blob URL 和檔案資訊
         let currentFileUrl = null;
         let originalFileName = 'image.png';
-        // 1. 點擊上傳按鈕 -> 觸發隱藏的 input
-        uploadBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
-        // 2. 監聽檔案選擇
+        // 監聽檔案選擇
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            // 重置狀態
             statusMsg.textContent = "讀取中...";
-            
             try {
-                // 儲存原始檔名
                 originalFileName = file.name;
-                // 建立 Blob URL (這是瀏覽器記憶體中的暫存連結)
-                // 如果這步失敗，通常是瀏覽器安全策略問題
                 if (currentFileUrl) {
-                    URL.revokeObjectURL(currentFileUrl); // 清除舊的記憶體
+                    URL.revokeObjectURL(currentFileUrl);
                 }
                 currentFileUrl = URL.createObjectURL(file);
-                // 更新介面
                 previewImage.src = currentFileUrl;
                 previewImage.onload = () => {
                     previewImage.classList.remove('hidden');
@@ -79,7 +77,6 @@
                     downloadBtn.disabled = false;
                     statusMsg.textContent = 已載入: ${file.name} (${Math.round(file.size / 1024)} KB);
                 };
-                
                 previewImage.onerror = () => {
                     statusMsg.textContent = "錯誤：無法顯示圖片";
                     statusMsg.classList.add('text-red-500');
@@ -89,18 +86,16 @@
                 statusMsg.textContent = "發生錯誤：" + error.message;
             }
         });
-        // 3. 下載按鈕邏輯
+        // 下載按鈕邏輯
         downloadBtn.addEventListener('click', () => {
             if (!currentFileUrl) return;
             try {
                 const link = document.createElement('a');
                 link.href = currentFileUrl;
-                // 在檔名前面加個前綴以區別
                 link.download = "copy_" + originalFileName;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                
                 statusMsg.textContent = "下載請求已發送";
                 setTimeout(() => {
                     statusMsg.textContent = 已載入: ${originalFileName};
